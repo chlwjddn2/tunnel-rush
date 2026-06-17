@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="ko">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <link rel="stylesheet" href="./css/index.css">
+  <title>터널 러시</title>
+</head>
+
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;">
+      <div class="badge"><span id="score">0</span> m</div>
+      <div class="badge" id="best">BEST 0</div>
+    </div>
+    <div class="badge"><span class="dot c"></span><span id="coins">0</span></div>
+    <button id="muteBtn">🔊</button>
+  </div>
+
+  <div id="touch" class="hidden">
+    <div class="tbtn" id="tleft">◀</div>
+    <div class="tbtn" id="tjump">▲ 점프</div>
+    <div class="tbtn" id="tright">▶</div>
+  </div>
+
+  <div id="start" class="overlay">
+    <div class="panel">
+      <div class="title">터널 러시</div>
+      <div class="sub">
+        회전하는 우주 터널을 달려요!<br>
+        <span class="key">←</span><span class="key">→</span> 좌우 이동 &nbsp;·&nbsp; <span class="key">Space</span> 점프<br>
+        구멍에 빠지지 말고 최대한 멀리! 젬도 모아보세요 💎
+      </div>
+      <button class="btn" id="startBtn">시작하기</button>
+    </div>
+  </div>
+
+  <div id="over" class="overlay hidden">
+    <div class="panel">
+      <div class="title" style="font-size:clamp(30px,7vw,46px)">게임 오버</div>
+      <div class="bigscore"><span id="finalScore">0</span> m</div>
+      <div class="bestline">💎 <span id="finalCoins">0</span> &nbsp;·&nbsp; BEST <span id="finalBest">0</span> m</div>
+      <button class="btn" id="retryBtn">다시 도전</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+  { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+  <script type="module" src="./js/index.js"></script>
+</body>
+
+</html>
