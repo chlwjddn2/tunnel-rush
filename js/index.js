@@ -17,6 +17,34 @@ const PLAYER_HALF_HEIGHT = 0.95;
 const MOVE_COOLDOWN = 140;
 const STAR_COUNT = 1400;
 
+// ---------- 페이즈 ----------
+const PHASES = [
+  {
+    minDist: 0,    bgColor: 0x05060f, fogColor: 0x05060f,
+    tileColors: [0x29407a, 0x375aa8, 0x4878c8, 0x2e4d96], tileEmissive: 0x0a1430,
+    ambientColor: 0x8090ff, rimColor: 0x66aaff,
+    safeWidth: 4, forceHoles: false, waveDrift: false,
+  },
+  {
+    minDist: 300,  bgColor: 0x07031a, fogColor: 0x07031a,
+    tileColors: [0x4a2070, 0x6232a2, 0x7848c2, 0x381860], tileEmissive: 0x180a30,
+    ambientColor: 0xaa80ff, rimColor: 0xaa66ff,
+    safeWidth: 3, forceHoles: false, waveDrift: true,
+  },
+  {
+    minDist: 700,  bgColor: 0x130408, fogColor: 0x130408,
+    tileColors: [0x7a2020, 0xa03030, 0xc04040, 0x601010], tileEmissive: 0x300808,
+    ambientColor: 0xff8880, rimColor: 0xff5555,
+    safeWidth: 2, forceHoles: true,  waveDrift: false,
+  },
+  {
+    minDist: 1300, bgColor: 0x0d000d, fogColor: 0x0d000d,
+    tileColors: [0x5a005a, 0x780078, 0x940094, 0x3a003a], tileEmissive: 0x200020,
+    ambientColor: 0xff80ff, rimColor: 0xff44ff,
+    safeWidth: 1, forceHoles: true,  waveDrift: true,
+  },
+];
+
 // ---------- 변수 설정 ----------
 const $canvas = document.querySelector('#game');
 const scoreElement = document.querySelector('#score');
@@ -68,7 +96,8 @@ addEventListener('resize', resize);
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
 const rimLight = new THREE.PointLight(0x66aaff, 0.6, 40);
 
-scene.add(new THREE.AmbientLight(0x8090ff, 0.7));
+const ambientLight = new THREE.AmbientLight(0x8090ff, 0.7);
+scene.add(ambientLight);
 dirLight.position.set(4, 9, 7); scene.add(dirLight);
 rimLight.position.set(0, -RADIUS + 2, 6); scene.add(rimLight);
 
@@ -100,7 +129,7 @@ const gemMaterial = new THREE.MeshStandardMaterial({
   emissiveIntensity: 0.8, roughness: 0.3, metalness: 0.4
 });
 
-const world = new THREE.Group(); 
+const world = new THREE.Group();
 scene.add(world);
 
 // ---------- 플레이어 ----------
@@ -114,7 +143,7 @@ player.add(body);
 const head = new THREE.Mesh(new THREE.SphereGeometry(0.34, 18, 16),
   new THREE.MeshStandardMaterial({ color: 0xffe0d0, emissive: 0x332018, roughness: 0.5 })
 );
-head.position.y = 0.78; 
+head.position.y = 0.78;
 player.add(head);
 const visor = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.18, 0.12),
   new THREE.MeshStandardMaterial({ color: 0x18324d, emissive: 0x2266aa, emissiveIntensity: 0.8 })
@@ -131,18 +160,43 @@ let currentAngle = 0;
 let jumpHeight = 0;
 let jumpVelocity = 0;
 let onGround = true;
+let jumpsRemaining = 2;
 let safeLane = 0;
 let coins = 0;
 let bestDistance = +(localStorage.getItem('tunnelrush_best') || 0);
 let lastMoveTime = 0;
 let audioContext = null;
 let muted = false;
+let activePhaseIndex = -1;
 
 const segments = new Map();   // segmentIndex -> {group, holes:Set, gems:[]}
 
 // ---------- HUD ----------
 
 bestElement.textContent = 'BEST ' + bestDistance;
+
+// ---------- 페이즈 헬퍼 ----------
+function getPhaseIndex(dist) {
+  let idx = 0;
+  for (let i = 0; i < PHASES.length; i++) {
+    if (dist >= PHASES[i].minDist) idx = i;
+  }
+  return idx;
+}
+
+function applyPhase(phaseIndex) {
+  const phase = PHASES[phaseIndex];
+  scene.background.setHex(phase.bgColor);
+  scene.fog.color.setHex(phase.fogColor);
+  ambientLight.color.setHex(phase.ambientColor);
+  rimLight.color.setHex(phase.rimColor);
+  palette.forEach((mat, i) => {
+    mat.color.setHex(phase.tileColors[i]);
+    mat.emissive.setHex(phase.tileEmissive);
+  });
+  if (phaseIndex > 0) beep(180, 0.4, 'sawtooth');
+  activePhaseIndex = phaseIndex;
+}
 
 // ---------- 세그먼트 생성/재활용 ----------
 function getHoleProbability(segmentIndex) {
@@ -157,11 +211,21 @@ function generateSegment(segmentIndex) {
   const holes = new Set();
   const gems = [];
   if (segmentIndex >= START_SAFE_SEGMENT) {
-    safeLane = ((safeLane + (Math.floor(Math.random() * 3) - 1)) % LANES + LANES) % LANES;
+    const approxDist = segmentIndex * SEGMENT_LENGTH;
+    const phase = PHASES[getPhaseIndex(approxDist)];
+
+    // 안전 레인 이동: 파도 페이즈는 한 방향으로, 나머지는 랜덤
+    if (phase.waveDrift) {
+      if (segmentIndex % 2 === 0) safeLane = (safeLane + 1) % LANES;
+    } else {
+      safeLane = ((safeLane + (Math.floor(Math.random() * 3) - 1)) % LANES + LANES) % LANES;
+    }
+
     const holeProbability = getHoleProbability(segmentIndex);
     for (let lane = 0; lane < LANES; lane++) {
-      if (lane === safeLane) continue;
-      if (Math.random() < holeProbability) holes.add(lane);
+      const distFromSafe = Math.min(Math.abs(lane - safeLane), LANES - Math.abs(lane - safeLane));
+      if (distFromSafe < phase.safeWidth) continue;
+      if (phase.forceHoles || Math.random() < holeProbability) holes.add(lane);
     }
   }
   const group = new THREE.Group();
@@ -219,8 +283,11 @@ function moveRight() {
 }
 
 function jump() {
-  if (gameState === 'play' && onGround) {
-    jumpVelocity = JUMP_VELOCITY; onGround = false; beep(660, 0.12, 'square');
+  if (gameState === 'play' && jumpsRemaining > 0) {
+    jumpVelocity = JUMP_VELOCITY;
+    onGround = false;
+    jumpsRemaining--;
+    beep(jumpsRemaining === 0 ? 880 : 660, 0.12, 'square');
   }
 }
 
@@ -232,9 +299,9 @@ addEventListener('keydown', (e) => {
 });
 
 function bindHold(el, fn) {
-  el.addEventListener('pointerdown', (e) => { 
-    e.preventDefault(); 
-    fn(); 
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    fn();
   });
 }
 
@@ -267,23 +334,26 @@ function deathSound() {
 }
 
 $muteButton.addEventListener('click', (e) => {
-  muted = !muted; 
+  muted = !muted;
   e.target.textContent = muted ? '🔇' : '🔊';
 });
 
 // ---------- 게임 시작/종료 ----------
 function start() {
   clearWorld();
-  distance = 0; 
-  speed = 14; 
-  playerLane = 0; 
-  currentAngle = 0; 
+  distance = 0;
+  speed = 14;
+  playerLane = 0;
+  currentAngle = 0;
   safeLane = 0;
-  jumpHeight = 0; 
-  jumpVelocity = 0; 
-  onGround = true; 
+  jumpHeight = 0;
+  jumpVelocity = 0;
+  onGround = true;
+  jumpsRemaining = 2;
   coins = 0;
-  scoreElement.textContent = '0'; 
+  activePhaseIndex = -1;
+  applyPhase(0);
+  scoreElement.textContent = '0';
   coinsElement.textContent = '0';
   $startBox.classList.add('hidden');
   $overBox.classList.add('hidden');
@@ -304,7 +374,7 @@ function gameOver() {
 
 function startFall() {
   if (gameState !== 'play') return;
-  gameState = 'fall'; 
+  gameState = 'fall';
   onGround = false;
   jumpVelocity = Math.min(jumpVelocity, -3);
   deathSound();
@@ -336,9 +406,13 @@ function animate() {
     player.rotation.set(-0.12, 0, 0);
   }
   else if (gameState === 'play') {
-    speed = 14 + Math.min(distance * 0.04, 26);
+    speed = 14 + Math.min(distance * 0.03, 26);
     distance += speed * deltaTime;
     world.position.z = distance;
+
+    // 페이즈 전환 체크
+    const newPhaseIndex = getPhaseIndex(distance);
+    if (newPhaseIndex !== activePhaseIndex) applyPhase(newPhaseIndex);
 
     // 레인 부드럽게 회전
     const targetAngle = playerLane * LANE_ANGLE;
@@ -358,7 +432,7 @@ function animate() {
       if (isOverHole) startFall();
     } else if (jumpHeight <= 0 && jumpVelocity <= 0) {
       if (isOverHole) { startFall(); }
-      else { jumpHeight = 0; jumpVelocity = 0; onGround = true; }
+      else { jumpHeight = 0; jumpVelocity = 0; onGround = true; jumpsRemaining = 2; }
     }
 
     // 젬 수집
