@@ -3,17 +3,6 @@
 회전하는 우주 터널을 달리는 3D 엔드리스 러너 게임입니다.  
 구멍에 빠지지 않고 최대한 멀리 달리며 젬을 모아보세요.
 
-## 실행 방법
-
-Node.js가 설치되어 있어야 합니다.
-
-```bash
-node server.js
-```
-
-브라우저에서 `http://localhost:8123` 으로 접속합니다.
-
-> `index.html`을 파일로 직접 열면 ES Module import가 차단되므로 반드시 서버를 통해 실행해야 합니다.
 
 ## 조작법
 
@@ -39,7 +28,6 @@ node server.js
 ```
 game/
 ├── index.html        # 마크업 및 importmap
-├── server.js         # 로컬 개발 서버 (Node.js, 포트 8123)
 ├── css/
 │   └── index.css     # 전체 스타일
 └── js/
@@ -51,16 +39,3 @@ game/
 - **Three.js r160** — 3D 렌더링 (CDN importmap)
 - **Web Audio API** — 효과음 (점프·젬 수집·사망)
 - **순수 JS / ES Modules** — 빌드 도구 없음
-
-## 주요 상수 (js/index.js)
-
-| 상수 | 기본값 | 설명 |
-|------|--------|------|
-| `RADIUS` | 6 | 터널 반지름 |
-| `LANES` | 12 | 레인 수 |
-| `SEGMENT_LENGTH` | 4 | 세그먼트 길이 |
-| `VIEW_AHEAD` | 34 | 앞쪽 생성 세그먼트 수 |
-| `GRAVITY` | 34 | 점프 중력 가속도 |
-| `JUMP_VELOCITY` | 12 | 점프 초기 속도 |
-| `MOVE_COOLDOWN` | 140ms | 레인 이동 최소 간격 |
-| `START_SAFE_SEGMENT` | 10 | 구멍 없는 초반 안전 구간 |
